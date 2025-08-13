@@ -25,7 +25,7 @@ class BaseTracker():
         '''
         raise self.predict_results
 
-
+    # 需由子类实现该process_frame方法
     def process_frame(self, frame):
         '''
         1.接受新的图像帧输入，记录在self.frames中

@@ -11,12 +11,10 @@ class KalmanFilterTracker(BaseTracker):
 
     - 清除所有历史轨迹
         self.clear_history_trajectory()
-    - TODO:获取历史轨迹
+    - 获取历史轨迹
         self.get_history_trajectory()
-    - 添加条件帧
-        self.add_condition_frame(frame, detect_annotation)
-    - TODO：预测下一帧（非条件帧）
-        self.predict_next_frame(frame)
+    - 处理（推理）新一帧
+        self.process_frame(frame)
 
     以上部分方法由BaseTracker实现，部分方法由本子类实现。
     本子类主要实现基于YOLO检测+kalman滤波的追踪算法
@@ -25,33 +23,18 @@ class KalmanFilterTracker(BaseTracker):
         super().__init__()
         '''
         继承父类初始化的缓存结构：
+        1. self.frames = [] 用于存放所有原始帧数据的列表: 
         
-        1. 用于存放所有原始帧数据的列表: self.frames = []
-        
-        2. 用于存放所有检测标注的字典: self.detect_annotations = {}
-            {"frame_idx": detect_annotation} key为帧索引，detect_annotation为标注字典
-        
-        3. 用于存放每一帧预测结果的字典: self.predict_results = {}
-            {"frame_idx": predict_result}  key为帧索引，predict_result为预测结果字典
+        2. self.predict_results = {} 用于存放每一帧预测结果的字典: 
+            {"frame_idx": predict_result_list}  key为帧索引，predict_result_list为预测结果列表
+            predict_result_list = [{"id":1, "location": {"x": 160.52359, "y": 119.27372}},...]
         '''
-        self.yolo = YOLO(yolo_model_path)  # 加载YOLO模型
+        self.model = YOLO("model/train_ir_9_640.pt")  # 加载YOLO模型
         print(f"[Tracker] 初始化完成")
 
-    def get_history_trajectory(self): 
-        history = []
-        for idx in range(len(self.frames)):
-            if idx in self.detect_annotations:
-                # 将{"id":17, "location":{"bottom":132.50513,"left":160.52359,"right":175.47101,"top":119.27372}}
-                # 处理成{"id":1,"location":{"x": 119.11305, "y": 279.63235}}
-                # TODO
-            elif idx in self.predict_results:
-                # 确保是"id":1,"location":{"x": 119.11305, "y": 279.63235}}格式
-                history.append(self.predict_results[idx])
-        return history
-
-    def predict_next_frame(self, frame):
+    def process_frame(self, frame):
         '''
-        当前帧为非条件帧，基于历史帧预测并追踪球位置：
+        对每一新帧的处理：
         1. 对新帧进行YOLO检测（只检测球，不分类别）
         2. 使用卡尔曼滤波对检测到的球位置进行预测+更新
         3. 存储预测结果到 self.predict_results
@@ -63,7 +46,7 @@ class KalmanFilterTracker(BaseTracker):
         # 1. YOLO检测
         detect_results = self.run_yolo_detection(frame)
         # detect_results 结构示例：
-        # [{"location": [x,y,w,h]}, ...]
+        # [{"location": {"x": 121.0, "y": 249.9}}, ...] 需要将检测框转化为中心坐标
 
         # 2. 卡尔曼滤波预测 + 更新
         tracked_results = self.kalman_update(detect_results)
@@ -83,9 +66,40 @@ class KalmanFilterTracker(BaseTracker):
 
     def run_yolo_detection(self, frame):
         '''
-        黑白yolo模型进行检测
+        使用yolo模型进行检测，这里是黑白模型，其中cls为2代表球类别
+        返回格式：
+        [
+            {"location": {"x": float, "y": float}},
+            {"location": {"x": float, "y": float}},
+            ...
+        ]
         '''
-        raise NotImplementedError
+        detect_results = []  # 初始化空的检测结果列表
+
+        # 进行检测
+        results = self.model([frame], stream=True, conf=0.6, verbose=False)
+
+        # 处理results对象生成器
+        for result in results:
+            boxes = result.boxes
+            if boxes is not None:
+                for box in boxes:
+                    # 左上角和右下角坐标
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    cls = box.cls.cpu().numpy()  # 物体类别
+                    # conf = box.conf.cpu().numpy()  # 置信度
+
+                    # 如果物体类别是2，则说明是我们要的球的类别
+                    if cls == 2:
+                        # 计算中心点坐标
+                        x_center = (x1 + x2) / 2
+                        y_center = (y1 + y2) / 2
+
+                        # 将检测结果的中心点坐标记录添加进detect_results
+                        detect_results.append({"location": {"x": x_center, "y": y_center}})
+
+        return detect_results
+
 
     def kalman_update(self, detections):
         """

@@ -18,3 +18,10 @@ test_tracking.py                        # 使用Tracker推理Dataset的主测试
 
 ```
 
+
+
+- `test_tracking.py` 是测试的主要脚本
+
+  其中实现`TestTracking()`类，用于加载指定Tracker，并推理指定数据集下所有样本。
+
+  该类的主要外部方法为：`TestTracking.start_test_tracking()`
