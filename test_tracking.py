@@ -1,9 +1,8 @@
 '''
 测试追踪部分算法的脚本
 
-读取测试数据集，给定追踪算法开头一帧的检测结果，
-追踪算法在后续的每一帧中进行追踪，
-根据每一帧的检测结果比对追踪算法的预测结果
+读取测试数据集，每一帧都交给Tracker进行追踪
+输出追踪算法的预测结果
 '''
 import os
 import re
@@ -56,7 +55,7 @@ class TestTracking():
     def process_video(self, video_path):
         '''
         在 video_path 下:
-        images                # 存放视频帧的文件夹
+        images
            ├──frame_0001.jpg
            ├──frame_0002.jpg
            ...
@@ -83,7 +82,8 @@ class TestTracking():
         # 3. 完成视频所有帧遍历后，记录预测结果，并清除Tracker轨迹
         # 一次性获取历史推理轨迹
         history_trajectory = self.tracker.get_history_trajectory()
-        
+        print(f"[system] 推理结果轨迹：\n {history_trajectory}")
+
         # 清除历史Tracker轨迹
         self.tracker.clear_history_trajectory()
 
