@@ -17,13 +17,12 @@ class BaseTracker():
         '''
         self.frames = []
         self.predict_results = {}
-        print(f"[Tracker] 已清除所有历史轨迹缓存，可开始新的预测")
 
     def get_history_trajectory(self):
         '''
         获取历史轨迹
         '''
-        raise self.predict_results
+        return self.predict_results
 
     # 需由子类实现该process_frame方法
     def process_frame(self, frame):
