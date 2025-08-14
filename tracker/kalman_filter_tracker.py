@@ -1,6 +1,12 @@
 '''
 这里实现kalman滤波追踪器
-使用基于黑白摄像头模型的球检测（不区分球类别），再使用kalman滤波追踪来将第一帧的球类别追踪到后续的每一帧上。
+使用基于黑白摄像头模型的球的YOLO目标检测（不区分球类别），再使用kalman滤波追踪来将第一帧的球类别追踪到后续的每一帧上。
+
+具体地，YOLO 检测器定位球体中心坐标，卡尔曼滤波基于匀速运动模型预测目标轨迹并校正观测噪声，
+匈牙利算法（配合欧氏距离阈值）完成检测框与预测轨迹的最优匹配。
+针对新出现目标、短暂遮挡和轨迹丢失等情况，采用 ID 自增分配、预测维持和连续丢帧剔除等策略，确保跟踪结果的连续性和鲁棒性。
+
+关键参数（如噪声权重、匹配阈值）需要经手动实验调优，平衡检测精度与运动预测的可靠性。
 '''
 from tracker.base_tracker import BaseTracker
 from ultralytics import YOLO
@@ -26,9 +32,8 @@ class KalmanFilterTracker(BaseTracker):
     def __init__(self):
         '''
         继承父类初始化的缓存结构：
-        self.frames = [] 用于存放所有原始帧数据的列表:
-
-        self.predict_results = {} 用于存放每一帧预测结果的字典:
+        self.frames = [] : 用于存放所有原始帧数据的列表
+        self.predict_results = {} : 用于存放每一帧预测结果的字典
             {"frame_idx": predict_result_list}  key为帧索引，predict_result_list为预测结果列表
             predict_result_list = [{"id":1, "location": {"x": 160.52359, "y": 119.27372}},...]
         '''
@@ -40,6 +45,7 @@ class KalmanFilterTracker(BaseTracker):
         self.next_id = 1  # 下一个可用的ID
 
 
+    # 对新帧进行处理
     def process_frame(self, frame):
         '''
         对每一新帧的处理：
@@ -146,8 +152,25 @@ class KalmanFilterTracker(BaseTracker):
             })
         return tracked_results
 
+    # 初始化卡尔曼滤波器
     def init_kalman_filter(self, x, y):
-        """初始化卡尔曼滤波器"""
+        """
+        初始化卡尔曼滤波器
+
+        参数：
+            x: 初始 x 坐标
+            y: 初始 y 坐标
+
+        滤波器配置：
+            状态向量: [x, y, vx, vy]
+            观测向量: [x, y]
+            状态转移矩阵: 假设匀速运动模型
+            观测矩阵: 只观测位置
+            协方差矩阵: 初始不确定性较大
+            观测噪声 (R): 默认设置为 2（更信任检测结果）
+            过程噪声 (Q): 默认设置为 0.5（适应快速运动）
+
+        """
         # 这里使用一个简单的卡尔曼滤波器，状态为 [x, y, vx, vy]，观测为 [x, y]
         kf = KalmanFilter(dim_x=4, dim_z=2)
 
@@ -177,8 +200,19 @@ class KalmanFilterTracker(BaseTracker):
 
         return kf
 
+    # 卡尔曼滤波更新步骤
     def kalman_update(self, detect_results):
-        """卡尔曼滤波更新步骤"""
+        """
+        卡尔曼滤波更新步骤，处理流程:
+
+        1. 预测所有现有跟踪器的位置
+        2. 使用匈牙利算法进行数据关联
+        3. 处理三种情况：
+            - 匹配成功的跟踪器：更新卡尔曼滤波器
+            - 未匹配的检测结果：初始化新跟踪器
+            - 未匹配的跟踪器：使用预测结果或删除（连续5帧未匹配）
+
+        """
         # 1. 预测所有现有跟踪器的位置
         predictions = {}
         for track_id, tracker in self.trackers.items():
@@ -251,8 +285,16 @@ class KalmanFilterTracker(BaseTracker):
 
         return tracked_results
 
+    # 使用匈牙利算法进行数据关联
     def match_detections_to_predictions(self, detect_results, predictions):
-        """使用匈牙利算法进行数据关联"""
+        """
+        使用匈牙利算法进行数据关联，处理流程：
+
+        1. 构建成本矩阵（基于欧氏距离）
+        2. 使用匈牙利算法找到最优匹配
+        3. 应用距离阈值（默认40像素）过滤不良匹配
+
+        """
         if not predictions or not detect_results:
             return {}
 
@@ -280,7 +322,7 @@ class KalmanFilterTracker(BaseTracker):
         return matched_pairs
 
     def clear_history_trajectory(self):
-        """清除所有历史轨迹"""
+        """清除所有历史轨迹，包括父类和该子类的缓存"""
         super().clear_history_trajectory()
         self.trackers = {}
         self.next_id = 1
