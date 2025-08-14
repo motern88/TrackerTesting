@@ -7,6 +7,11 @@
 针对新出现目标、短暂遮挡和轨迹丢失等情况，采用 ID 自增分配、预测维持和连续丢帧剔除等策略，确保跟踪结果的连续性和鲁棒性。
 
 关键参数（如噪声权重、匹配阈值）需要经手动实验调优，平衡检测精度与运动预测的可靠性。
+
+额外环境依赖：
+    pip install ultralytics
+    pip install filterpy
+
 '''
 from tracker.base_tracker import BaseTracker
 from ultralytics import YOLO
