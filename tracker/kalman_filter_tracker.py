@@ -37,7 +37,7 @@ class KalmanFilterTracker(BaseTracker):
         self.model = YOLO("model/train_ir_9_640.pt")
 
         self.trackers = {}  # 存储每个ID的卡尔曼滤波器
-        self.next_id = 1  # TODO：下一个可用的ID
+        self.next_id = 1  # 下一个可用的ID
 
 
     def process_frame(self, frame):
