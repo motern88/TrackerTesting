@@ -8,6 +8,7 @@ import os
 import re
 import json
 import cv2
+import random
 
 class TestTracking():
 
@@ -117,6 +118,8 @@ class TestTracking():
     # 可视化历史推理轨迹
     def visualize_trajectory(self, history_trajectory, frames):
         '''
+        为所有帧frames绘制历史轨迹可视化。
+
         - history_trajectory 为所有物体的轨迹{"frame_idx": predict_result_list}：
             {
                 "0": [
@@ -131,6 +134,19 @@ class TestTracking():
         '''
         # 用于存储每个 id 的历史点坐标
         trajectory_points = {}
+        # 存储每个 id 的颜色 (BGR)
+        id_colors = {}
+
+        def get_color_for_id(obj_id):
+            """固定 ID 颜色"""
+            if obj_id not in id_colors:
+                random.seed(obj_id)  # 保证相同 ID 每次生成的颜色一致
+                id_colors[obj_id] = (
+                    random.randint(50, 255),  # B
+                    random.randint(50, 255),  # G
+                    random.randint(50, 255)  # R
+                )
+            return id_colors[obj_id]
 
         for frame_idx_str, objects in history_trajectory.items():
             frame_idx = int(frame_idx_str)
@@ -140,6 +156,7 @@ class TestTracking():
                 obj_id = obj["id"]
                 x = int(obj["location"]["x"])
                 y = int(obj["location"]["y"])
+                color = get_color_for_id(obj_id)
 
                 # 保存轨迹点
                 if obj_id not in trajectory_points:
@@ -149,7 +166,7 @@ class TestTracking():
                 # 画当前点
                 cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
                 cv2.putText(frame, f"ID:{obj_id}", (x + 8, y - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
                 # 如果有历史点，画轨迹线
                 if len(trajectory_points[obj_id]) > 1:
@@ -157,7 +174,7 @@ class TestTracking():
                         cv2.line(frame,
                                  trajectory_points[obj_id][i - 1],
                                  trajectory_points[obj_id][i],
-                                 (0, 255, 0), 2)
+                                 color, 2)
 
             # 更新 frames（如果需要保存结果）
             frames[frame_idx] = frame

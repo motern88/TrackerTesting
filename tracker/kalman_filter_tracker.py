@@ -167,8 +167,10 @@ class KalmanFilterTracker(BaseTracker):
 
         # 协方差矩阵
         kf.P *= 1000  # 初始不确定性较大
-        kf.R = np.eye(2) * 10  # 观测噪声
-        kf.Q = np.eye(4) * 0.1  # 过程噪声
+        # NOTE: 降低观测噪声（更信任检测结果）. 减少由于速度惯量太大引起的误匹配. 当前最佳：2
+        kf.R = np.eye(2) * 2  # 观测噪声
+        # NOTE: 提高过程噪声（更适应快速运动）. 可以适应更高的加速度方向变化. 当前最佳：0.5
+        kf.Q = np.eye(4) * 0.5  # 过程噪声
 
         # 初始状态
         kf.x = np.array([x, y, 0, 0])
@@ -271,7 +273,8 @@ class KalmanFilterTracker(BaseTracker):
         matched_pairs = {}
         for i, j in zip(row_ind, col_ind):
             # 可以设置一个最大距离阈值来过滤不良匹配
-            if cost_matrix[i, j] < 50:  # 阈值可以根据需要调整
+            # NOTE：根据场景缩小阈值（减少远距离错误关联），小于30会产生额外的丢失， 当前最佳：40
+            if cost_matrix[i, j] < 40:  # 阈值可以根据需要调整
                 matched_pairs[track_ids[i]] = j
 
         return matched_pairs
