@@ -34,8 +34,8 @@ class TestTracking():
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
+    # opencv加载图像，返回nd数组
     def load_img(self,img_path):
-        '''opencv加载图像，返回nd数组'''
         img = cv2.imread(img_path)
         return img
 
@@ -200,6 +200,7 @@ if __name__ == "__main__":
         tracker = tracker,
         output_dir = "./output"
     )
+    # --------- 3. 开始追踪测试 --------------
     test_tracking.start_test_tracking()
 
 
