@@ -293,36 +293,89 @@ class KalmanFilterTracker(BaseTracker):
     # 使用匈牙利算法进行数据关联
     def match_detections_to_predictions(self, detect_results, predictions):
         """
-        使用匈牙利算法进行数据关联，处理流程：
+        使用匈牙利算法进行数据关联，
+        改进数据关联方法，优先保证低速目标的ID连续性
 
-        1. 构建成本矩阵（基于欧氏距离）
-        2. 使用匈牙利算法找到最优匹配
+        处理流程：
+        1. 构建双层成本矩阵（位置距离 + 速度惩罚项）
+        2. 分阶段匹配：
+            - 第一阶段：优先匹配低速目标（位置变化小的）
+            - 第二阶段：匹配剩余高速目标
         3. 应用距离阈值（默认40像素）过滤不良匹配
 
         """
         if not predictions or not detect_results:
             return {}
 
-        # 构建成本矩阵（使用欧氏距离）
+        # 获取所有跟踪器的当前速度信息
+        speed_info = {
+            track_id: np.linalg.norm(tracker["kf"].x[2:4])  # 计算速度大小
+            for track_id, tracker in self.trackers.items()
+        }
+
+        # 构建增强的成本矩阵（加入速度惩罚项）
         cost_matrix = np.zeros((len(predictions), len(detect_results)))
         track_ids = list(predictions.keys())
 
         for i, track_id in enumerate(track_ids):
             pred_pos = predictions[track_id]
+            speed = speed_info[track_id]
+
             for j, det in enumerate(detect_results):
                 det_pos = np.array([det["location"]["x"], det["location"]["y"]])
-                cost_matrix[i, j] = np.linalg.norm(pred_pos - det_pos)
+                # 基础成本：位置距离
+                position_cost = np.linalg.norm(pred_pos - det_pos)
+                # 速度惩罚项：速度越快惩罚越大（权重可调）
+                # NOTE：
+                speed_penalty = speed * 0.3  # 速度权重系数
 
-        # 使用匈牙利算法找到最优匹配
-        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+                # 总成本 = 位置距离 + 速度惩罚
+                cost_matrix[i, j] = position_cost + speed_penalty
 
-        # 构建匹配结果字典 {track_id: detection_index}
+        # 分阶段匹配策略
         matched_pairs = {}
-        for i, j in zip(row_ind, col_ind):
-            # 可以设置一个最大距离阈值来过滤不良匹配
-            # NOTE：根据场景缩小阈值（减少远距离错误关联），小于30会产生额外的丢失， 当前最佳：40
-            if cost_matrix[i, j] < 40:  # 阈值可以根据需要调整
-                matched_pairs[track_ids[i]] = j
+        used_det_indices = set()
+
+        # 第一阶段：优先匹配低速目标（速度 < 阈值）
+        # NOTE：用于区分高速和低俗目标的阈值（主要能区分移动和静止的目标就行），当前最佳：5.0
+        speed_threshold = 5.0  # 速度阈值，可调整
+        slow_indices = [i for i, track_id in enumerate(track_ids)
+                        if speed_info[track_id] < speed_threshold]
+
+        if slow_indices:
+            # 提取低速目标的子成本矩阵
+            sub_matrix = cost_matrix[slow_indices, :]
+            row_sub, col_sub = linear_sum_assignment(sub_matrix)
+
+            # 处理匹配结果
+            for r, c in zip(row_sub, col_sub):
+                original_row = slow_indices[r]
+                # NOTE：低速目标的匹配距离阈值，当前最佳：30
+                if cost_matrix[original_row, c] < 40:  # 保持距离阈值
+                    matched_pairs[track_ids[original_row]] = c
+                    used_det_indices.add(c)
+
+        # 第二阶段：匹配剩余目标（包括高速目标）
+        remaining_det_indices = [j for j in range(len(detect_results))
+                                 if j not in used_det_indices]
+        remaining_track_indices = [i for i in range(len(track_ids))
+                                   if track_ids[i] not in matched_pairs]
+
+        if remaining_det_indices and remaining_track_indices:
+            # 提取剩余目标的子成本矩阵
+            sub_matrix = cost_matrix[np.ix_(remaining_track_indices,
+                                            remaining_det_indices)]
+            row_sub, col_sub = linear_sum_assignment(sub_matrix)
+
+            # 处理匹配结果
+            for r, c in zip(row_sub, col_sub):
+                original_row = remaining_track_indices[r]
+                original_col = remaining_det_indices[c]
+
+
+                # NOTE：根据场景缩小高速目标的阈值（减少远距离错误关联），小于30会产生额外的丢失， 当前最佳：40
+                if cost_matrix[original_row, original_col] < 40:  # 阈值可以根据需要调整
+                    matched_pairs[track_ids[original_row]] = original_col
 
         return matched_pairs
 
