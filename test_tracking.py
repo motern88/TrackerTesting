@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
     # --------- 2. 初始化追踪测试器 -----------
     test_tracking = TestTracking(
-        test_dataset_path = "./dataset/test_dataset",
+        test_dataset_path = "./dataset/test_dataset2",
         tracker = tracker,
         output_dir = "./output"
     )

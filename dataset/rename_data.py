@@ -26,7 +26,7 @@ test_dataset
 import os
 
 # 数据集根目录
-root_dir = "test_dataset"
+root_dir = "test_dataset2"
 
 for video_name in os.listdir(root_dir):
     video_path = os.path.join(root_dir, video_name, "images")
