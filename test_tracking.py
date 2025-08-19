@@ -186,17 +186,20 @@ if __name__ == "__main__":
     '''
     进行测试，根目录下运行 python test_tracking.py
     '''
-    from tracker.base_tracker import BaseTracker
-    from tracker.kalman_filter_tracker import KalmanFilterTracker
+    from tracker.base_tracker import BaseTracker  # 定义Tracker基础方法的类
+    from tracker.kalman_filter_tracker import KalmanFilterTracker   # Kalman滤波基础Tracker
+    from tracker.kalman_filter_tracker2 import KalmanFilterTracker2  # Kalman滤波Tracker改进算法
+
 
     # --------- 1.初始化要测试的追踪器 ---------
-    tracker = KalmanFilterTracker()
+    # tracker = KalmanFilterTracker2()
     # tracker = BaseTracker()
+    tracker = KalmanFilterTracker()
 
 
     # --------- 2. 初始化追踪测试器 -----------
     test_tracking = TestTracking(
-        test_dataset_path = "./dataset/test_dataset2",
+        test_dataset_path = "./dataset/test_dataset",
         tracker = tracker,
         output_dir = "./output"
     )
